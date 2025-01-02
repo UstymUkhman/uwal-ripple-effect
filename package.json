@@ -1,0 +1,20 @@
+{
+  "name": "uwal-ripple-effect",
+  "description": "Ripple effect with text rendering in UWAL and WebGPU",
+  "homepage": "https://github.com/UstymUkhman/uwal-ripple-effect#readme",
+  "version": "0.0.0",
+  "private": true,
+  "license": "MIT",
+  "type": "module",
+  "scripts": {
+    "dev": "vite",
+    "build": "vite build",
+    "preview": "vite preview"
+  },
+  "devDependencies": {
+    "vite": "^6.0.5"
+  },
+  "dependencies": {
+    "uwal": "^0.0.10"
+  }
+}
