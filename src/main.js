@@ -1,10 +1,14 @@
-import { UWAL, SDFText, Shaders, Color, Shape } from "uwal";
+import { UWAL, SDFText, Color } from "uwal";
 import RegularData from "/fonts/roboto-regular.json?url";
 import RegularTexture from "/fonts/roboto-regular.png";
 import BoldData from "/fonts/roboto-bold.json?url";
 import BoldTexture from "/fonts/roboto-bold.png";
 
 const canvas = document.getElementById("scene");
+
+// https://caniuse.com/?search=dual-source-blending:
+await UWAL.SetRequiredFeatures(["dual-source-blending"]);
+
 const Renderer = new (await UWAL.RenderPipeline(canvas));
 
 let Title, Subtitle;
@@ -25,7 +29,7 @@ Promise.all([
     loadTexture(RegularTexture)
 ]).then(async ([boldData, regularData, boldTexture, regularTexture]) =>
 {
-    const { module: textModule, entry: fragmentEntry } =
+    const { module: textModule, entry: fragmentEntry, target } =
         await SDFText.GetFragmentStateParams(Renderer);
 
     const textLayout = Renderer.CreateVertexBufferLayout(
@@ -33,15 +37,15 @@ Promise.all([
     );
 
     Renderer.CreatePipeline({
-        fragment: Renderer.CreateFragmentState(textModule, fragmentEntry),
+        fragment: Renderer.CreateFragmentState(textModule, fragmentEntry, target),
         vertex: Renderer.CreateVertexState(textModule, "textVertex", textLayout)
     });
 
     const colorAttachment = Renderer.CreateColorAttachment();
-    colorAttachment.clearValue = new Color(0xffffff).rgba;
+    colorAttachment.clearValue = new Color(0x000000).rgba;
     Renderer.CreatePassDescriptor(colorAttachment);
 
-    const subtitleColor = new Color(0x000000);
+    const subtitleColor = new Color(0xffffff);
     const titleColor = new Color(0x005a9c);
 
     Subtitle = new SDFText({
