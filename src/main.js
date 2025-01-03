@@ -3,6 +3,7 @@ import RegularData from "/fonts/roboto-regular.json?url";
 import RegularTexture from "/fonts/roboto-regular.png";
 import BoldData from "/fonts/roboto-bold.json?url";
 import BoldTexture from "/fonts/roboto-bold.png";
+import TextFrag from "./Text.frag.wgsl?raw";
 import Result from "./Result.wgsl?raw";
 import Ocean from "/ocean.jpg";
 
@@ -10,9 +11,9 @@ let textTexture, backgroundTexture;
 
 const canvas = document.getElementById("scene");
 
-// https://caniuse.com/?search=dual-source-blending:
 await UWAL.SetRequiredFeatures([
-    "dual-source-blending", "bgra8unorm-storage"
+    // https://caniuse.com/?search=dual-source-blending:
+    /* "dual-source-blending", */ "bgra8unorm-storage"
 ]);
 
 const Renderer = new (await UWAL.RenderPipeline(canvas));
@@ -48,6 +49,7 @@ const loadTexture = src => new Promise(resolve =>
 });
 
 const BackgroundUniform = { buffer: null, offset: null };
+const TexureUniform = { buffer: null, offset: null };
 const Texture = new (await UWAL.Texture(Renderer));
 
 Promise.all([
@@ -58,16 +60,16 @@ Promise.all([
     loadTexture(RegularTexture)
 ]).then(async ([boldData, ocean, regularData, boldTexture, regularTexture]) =>
 {
-    const { module: textModule, entry: fragmentEntry, target } =
-        await SDFText.GetFragmentStateParams(Renderer);
+    const { module: textModule, target } =
+        await SDFText.GetFragmentStateParams(Renderer, TextFrag);
 
     const textLayout = Renderer.CreateVertexBufferLayout(
         ["position", "texture", "size"], void 0, "textVertex"
     );
 
     textPipeline = Renderer.CreatePipeline({
-        fragment: Renderer.CreateFragmentState(textModule, fragmentEntry, target),
-        vertex: Renderer.CreateVertexState(textModule, "textVertex", textLayout)
+        vertex: Renderer.CreateVertexState(textModule, "textVertex", textLayout),
+        fragment: Renderer.CreateFragmentState(textModule, void 0, target)
     });
 
     const subtitleColor = new Color(0xff, 0xff, 0xff, 0xE5);
@@ -95,6 +97,25 @@ Promise.all([
 
     textTexture = Texture.CreateStorageTexture({ usage: GPUTextureUsage.RENDER_ATTACHMENT });
     backgroundTexture = Texture.CopyImageToTexture(ocean, { mipmaps: false, create: true });
+
+    const { buffer: texureBuffer, TexureOffset } =
+        Renderer.CreateUniformBuffer("TexureOffset");
+
+    TexureOffset.set(getBackgroundOffset(backgroundTexture));
+    Renderer.WriteBuffer(texureBuffer, TexureOffset);
+
+    TexureUniform.buffer = texureBuffer;
+    TexureUniform.offset = TexureOffset;
+
+    Title.AddBindGroups(
+        Renderer.CreateBindGroup(
+            Renderer.CreateBindGroupEntries([
+                Texture.CreateSampler(),
+                { buffer: texureBuffer },
+                backgroundTexture.createView()
+            ]), 1
+        )
+    );
 
     resultPipeline = Renderer.CreatePipeline(
         Renderer.CreateShaderModule([Shaders.Quad, Result])
@@ -152,6 +173,9 @@ function resize()
     Subtitle.Resize();
 
     textTexture.destroy();
+
+    TexureUniform.offset.set(getBackgroundOffset(backgroundTexture));
+    Renderer.WriteBuffer(TexureUniform.buffer, TexureUniform.offset);
 
     BackgroundUniform.offset.set(getBackgroundOffset(backgroundTexture));
     Renderer.WriteBuffer(BackgroundUniform.buffer, BackgroundUniform.offset);
