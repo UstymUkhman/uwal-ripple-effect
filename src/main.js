@@ -6,16 +6,18 @@ import BoldTexture from "/fonts/roboto-bold.png";
 import Result from "./Result.wgsl?raw";
 import Ocean from "/ocean.jpg";
 
-let backgroundTexture;
+let textTexture, backgroundTexture;
 
 const canvas = document.getElementById("scene");
 
 // https://caniuse.com/?search=dual-source-blending:
-await UWAL.SetRequiredFeatures(["dual-source-blending"]);
+await UWAL.SetRequiredFeatures([
+    "dual-source-blending", "bgra8unorm-storage"
+]);
 
 const Renderer = new (await UWAL.RenderPipeline(canvas));
 
-let Title, Subtitle;
+let Title, Subtitle, textPipeline, resultPipeline;
 let texturesLoaded = false;
 
 const loadJSON = async src => (await fetch(src)).json();
@@ -46,7 +48,7 @@ const loadTexture = src => new Promise(resolve =>
 });
 
 const BackgroundUniform = { buffer: null, offset: null };
-const Texture = new (await UWAL.Texture());
+const Texture = new (await UWAL.Texture(Renderer));
 
 Promise.all([
     loadJSON(BoldData),
@@ -63,17 +65,13 @@ Promise.all([
         ["position", "texture", "size"], void 0, "textVertex"
     );
 
-    Renderer.CreatePipeline({
+    textPipeline = Renderer.CreatePipeline({
         fragment: Renderer.CreateFragmentState(textModule, fragmentEntry, target),
         vertex: Renderer.CreateVertexState(textModule, "textVertex", textLayout)
     });
 
-    const colorAttachment = Renderer.CreateColorAttachment();
-    colorAttachment.clearValue = new Color(0x000000).rgba;
-    Renderer.CreatePassDescriptor(colorAttachment);
-
-    const subtitleColor = new Color(0xffffff);
-    const titleColor = new Color(0x005a9c);
+    const subtitleColor = new Color(0xff, 0xff, 0xff, 0xE5);
+    const titleColor = new Color(0x00, 0x5a, 0x9c, 0xCC);
 
     Subtitle = new SDFText({
         color: subtitleColor,
@@ -95,9 +93,12 @@ Promise.all([
     Title.Write("UWAL");
     Subtitle.Write("Unopinionated WebGPU Abstraction Library");
 
+    textTexture = Texture.CreateStorageTexture({ usage: GPUTextureUsage.RENDER_ATTACHMENT });
     backgroundTexture = Texture.CopyImageToTexture(ocean, { mipmaps: false, create: true });
 
-    Renderer.CreatePipeline(Renderer.CreateShaderModule([Shaders.Quad, Result]));
+    resultPipeline = Renderer.CreatePipeline(
+        Renderer.CreateShaderModule([Shaders.Quad, Result])
+    );
 
     const { buffer: backgroundBuffer, BackgroundOffset } =
         Renderer.CreateUniformBuffer("BackgroundOffset");
@@ -119,19 +120,26 @@ Promise.all([
 
 function render()
 {
-    // Title.Render(false);
-    // Subtitle.Render();
+    Renderer.SetPipeline(textPipeline);
+    Renderer.TextureView = textTexture.createView();
+
+    Title.Render(false);
+    Subtitle.Render(false);
+    Renderer.DestroyCurrentPass();
+    Renderer.SetPipeline(resultPipeline);
 
     Renderer.SetBindGroups(
         Renderer.CreateBindGroup(
             Renderer.CreateBindGroupEntries([
                 Texture.CreateSampler(),
+                textTexture.createView(),
                 backgroundTexture.createView(),
                 { buffer: BackgroundUniform.buffer }
             ])
         )
     );
 
+    Renderer.TextureView = void 0;
     Renderer.Render(6);
 }
 
@@ -143,8 +151,12 @@ function resize()
     Title.Resize();
     Subtitle.Resize();
 
+    textTexture.destroy();
+
     BackgroundUniform.offset.set(getBackgroundOffset(backgroundTexture));
     Renderer.WriteBuffer(BackgroundUniform.buffer, BackgroundUniform.offset);
+
+    textTexture = Texture.CreateStorageTexture({ usage: GPUTextureUsage.RENDER_ATTACHMENT });
 
     render();
 }
