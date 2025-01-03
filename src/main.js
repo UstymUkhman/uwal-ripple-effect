@@ -1,8 +1,12 @@
-import { UWAL, SDFText, Color } from "uwal";
+import { UWAL, SDFText, Shaders, Color } from "uwal";
 import RegularData from "/fonts/roboto-regular.json?url";
 import RegularTexture from "/fonts/roboto-regular.png";
 import BoldData from "/fonts/roboto-bold.json?url";
 import BoldTexture from "/fonts/roboto-bold.png";
+import Result from "./Result.wgsl?raw";
+import Ocean from "/ocean.jpg";
+
+let backgroundTexture;
 
 const canvas = document.getElementById("scene");
 
@@ -16,18 +20,41 @@ let texturesLoaded = false;
 
 const loadJSON = async src => (await fetch(src)).json();
 
+function getBackgroundOffset(texture, offset = [0, 0])
+{
+    const [width, height] = Renderer.CanvasSize;
+    const imageAspectRatio = texture.width / texture.height;
+
+    if (Renderer.AspectRatio < imageAspectRatio)
+    {
+        const targetWidth = height * imageAspectRatio;
+        offset[0] = (targetWidth - width) / 2 / targetWidth * -1;
+    }
+    else
+    {
+        const targetHeight = width / imageAspectRatio;
+        offset[1] = (targetHeight - height) / 2 / targetHeight;
+    }
+
+    return offset;
+}
+
 const loadTexture = src => new Promise(resolve =>
 {
     const texture = new Image(); texture.src = src;
     texture.onload = () => resolve(texture);
 });
 
+const BackgroundUniform = { buffer: null, offset: null };
+const Texture = new (await UWAL.Texture());
+
 Promise.all([
     loadJSON(BoldData),
+    loadTexture(Ocean),
     loadJSON(RegularData),
     loadTexture(BoldTexture),
     loadTexture(RegularTexture)
-]).then(async ([boldData, regularData, boldTexture, regularTexture]) =>
+]).then(async ([boldData, ocean, regularData, boldTexture, regularTexture]) =>
 {
     const { module: textModule, entry: fragmentEntry, target } =
         await SDFText.GetFragmentStateParams(Renderer);
@@ -68,6 +95,19 @@ Promise.all([
     Title.Write("UWAL");
     Subtitle.Write("Unopinionated WebGPU Abstraction Library");
 
+    backgroundTexture = Texture.CopyImageToTexture(ocean, { mipmaps: false, create: true });
+
+    Renderer.CreatePipeline(Renderer.CreateShaderModule([Shaders.Quad, Result]));
+
+    const { buffer: backgroundBuffer, BackgroundOffset } =
+        Renderer.CreateUniformBuffer("BackgroundOffset");
+
+    BackgroundOffset.set(getBackgroundOffset(backgroundTexture));
+    Renderer.WriteBuffer(backgroundBuffer, BackgroundOffset);
+
+    BackgroundUniform.buffer = backgroundBuffer;
+    BackgroundUniform.offset = BackgroundOffset;
+
     const dpr = Renderer.DevicePixelRatio;
 
     Subtitle.Position = [0, 100 * dpr];
@@ -79,8 +119,20 @@ Promise.all([
 
 function render()
 {
-    Title.Render(false);
-    Subtitle.Render();
+    // Title.Render(false);
+    // Subtitle.Render();
+
+    Renderer.SetBindGroups(
+        Renderer.CreateBindGroup(
+            Renderer.CreateBindGroupEntries([
+                Texture.CreateSampler(),
+                backgroundTexture.createView(),
+                { buffer: BackgroundUniform.buffer }
+            ])
+        )
+    );
+
+    Renderer.Render(6);
 }
 
 function resize()
@@ -90,6 +142,9 @@ function resize()
 
     Title.Resize();
     Subtitle.Resize();
+
+    BackgroundUniform.offset.set(getBackgroundOffset(backgroundTexture));
+    Renderer.WriteBuffer(BackgroundUniform.buffer, BackgroundUniform.offset);
 
     render();
 }
