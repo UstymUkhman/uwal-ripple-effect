@@ -9,11 +9,9 @@ import Wave from "./Wave.wgsl?raw";
 import Ripple from "/ripple.png";
 import Ocean from "/ocean.jpg";
 
+const mouse = new Array(2), WAVES = 128;
 const canvas = document.getElementById("scene");
-const mouse = new Array(2), WAVES = 128, SCALE = 4;
-
 let textTexture, wavesTexture, backgroundTexture;
-let minScale = canvas.width / 4800, current = 0;
 
 await UWAL.SetRequiredFeatures([
     // https://caniuse.com/?search=dual-source-blending:
@@ -21,9 +19,10 @@ await UWAL.SetRequiredFeatures([
 ]);
 
 const Renderer = new (await UWAL.RenderPipeline(canvas));
-
 let Title, Subtitle, shape, textPipeline, resultPipeline, movement;
-let lastRender = performance.now(), texturesLoaded = false, moving = false;
+
+let lastRender = performance.now(), texturesLoaded = false, moving = false, current = 0;
+const waves = Array.from({ length: WAVES }).map(() => ({ angle: 0, scale: 0, alpha: 0 }));
 
 const loadJSON = async src => (await fetch(src)).json();
 
@@ -88,9 +87,8 @@ function updateWaves()
     const now = performance.now();
     const delta = (now - lastRender) / 1e3;
 
-    const deltaD10 = delta * 0.1;
-    const deltaM5  = delta * 5;
-    const deltaM2  = delta * 2;
+    const deltaM5 = delta * 5;
+    const deltaM2 = delta * 2;
 
     if (moving)
     {
@@ -101,7 +99,7 @@ function updateWaves()
         const offset = current * waveStructSize;
 
         waveValues.set([wave.angle = angle], offset + 2);
-        waveValues.set([wave.scale = SCALE], offset + 3);
+        waveValues.set([wave.scale = 0.1  ], offset + 3);
         waveValues.set([wave.alpha = 0.192], offset + 4);
     }
 
@@ -111,9 +109,9 @@ function updateWaves()
         const offset = w * waveStructSize;
         const scale = wave.scale * deltaM2;
 
-        wave.alpha  = wave.alpha - deltaD10;
+        wave.alpha = Math.max(wave.alpha * 0.96, 0.002);
         wave.angle += wave.alpha * deltaM5 + deltaM2;
-        wave.scale  = Math.max(wave.scale - scale, minScale);
+        wave.scale = Math.min(wave.scale + scale, 1);
         current === w && waveValues.set(mouse, offset);
 
         waveValues.set([wave.angle], offset + 2);
@@ -164,10 +162,6 @@ const waveStructSize = wavesStructSize / WAVES;
 const BackgroundUniform = { buffer: null, offset: null };
 const TexureUniform = { buffer: null, offset: null };
 const Texture = new (await UWAL.Texture(Renderer));
-
-const waves = Array.from({ length: WAVES }).map(() => ({
-    angle: randomAngle(), scale: SCALE, alpha: 0
-}));
 
 Promise.all([
     loadJSON(BoldData),
@@ -298,7 +292,6 @@ function resize()
 {
     Renderer.SetCanvasSize(innerWidth, innerHeight);
     if (!texturesLoaded) return;
-    minScale = width / 4800;
 
     Title.Resize();
     Subtitle.Resize();
