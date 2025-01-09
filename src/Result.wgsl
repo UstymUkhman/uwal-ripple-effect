@@ -1,3 +1,5 @@
+const FRAMEBUFFER = true;
+
 struct VertexOutput
 {
     @location(0) backCoord: vec2f,
@@ -7,8 +9,9 @@ struct VertexOutput
 
 @group(0) @binding(0) var Sampler: sampler;
 @group(0) @binding(1) var Text: texture_2d<f32>;
-@group(0) @binding(2) var Background: texture_2d<f32>;
-@group(0) @binding(3) var<uniform> BackgroundOffset: vec2f;
+@group(0) @binding(2) var Waves: texture_2d<f32>;
+@group(0) @binding(3) var Background: texture_2d<f32>;
+@group(0) @binding(4) var<uniform> BackgroundOffset: vec2f;
 
 @vertex fn vertex(@builtin(vertex_index) index: u32) -> VertexOutput
 {
@@ -28,6 +31,9 @@ struct VertexOutput
     @location(1) textCoord: vec2f
 ) -> @location(0) vec4f
 {
+    let wave = textureSample(Waves, Sampler, textCoord).x;
+    if (FRAMEBUFFER == true) { return vec4f(vec3f(wave), 1); }
+
     let backColor = textureSample(Background, Sampler, backCoord);
     let textColor = textureSample(Text, Sampler, textCoord);
 
