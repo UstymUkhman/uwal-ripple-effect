@@ -2,7 +2,7 @@
 
 > Ripple effect with text rendering in [UWAL](https://github.com/UstymUkhman/uwal) and [WebGPU](https://developer.mozilla.org/en-US/docs/Web/API/WebGPU_API).
 
-<!-- [![Basic Program](https://img.youtube.com/vi/TOCvJR07H6k/0.jpg)](https://www.youtube.com/watch?v=TOCvJR07H6k) -->
+[![Ripple Effect](https://img.youtube.com/vi/j07n96qDe20/0.jpg)](https://www.youtube.com/watch?v=j07n96qDe20)
 
 ## Download
 

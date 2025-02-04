@@ -11,15 +11,25 @@ import Ocean from "/ocean.jpg";
 
 const mouse = new Array(2), WAVES = 128;
 const canvas = document.getElementById("scene");
-let textTexture, wavesTexture, backgroundTexture;
+let Renderer, textTexture, wavesTexture, backgroundTexture;
+let Title, Subtitle, shape, textPipeline, resultPipeline, movement;
 
 await UWAL.SetRequiredFeatures([
     // https://caniuse.com/?search=dual-source-blending:
     /* "dual-source-blending", */ "bgra8unorm-storage"
 ]);
 
-const Renderer = new (await UWAL.RenderPipeline(canvas));
-let Title, Subtitle, shape, textPipeline, resultPipeline, movement;
+try
+{
+    Renderer = new (await UWAL.RenderPipeline(canvas));
+}
+catch (error)
+{
+    alert(error);
+    canvas.style.width = canvas.width = innerWidth;
+    canvas.style.height = canvas.height = innerHeight;
+    canvas.style.background = "center / cover no-repeat url('./preview.jpg')";
+}
 
 let lastRender = performance.now(), texturesLoaded = false, moving = false, current = 0;
 const waves = Array.from({ length: WAVES }).map(() => ({ angle: 0, scale: 0, alpha: 0 }));
@@ -160,7 +170,7 @@ const waveValues = new Float32Array(wavesStructSize);
 const waveStructSize = wavesStructSize / WAVES;
 
 const BackgroundUniform = { buffer: null, offset: null };
-const TexureUniform = { buffer: null, offset: null };
+const TextureUniform = { buffer: null, offset: null };
 const Texture = new (await UWAL.Texture(Renderer));
 
 Promise.all([
@@ -213,20 +223,20 @@ Promise.all([
     textTexture = Texture.CreateStorageTexture({ usage: GPUTextureUsage.RENDER_ATTACHMENT });
     backgroundTexture = Texture.CopyImageToTexture(ocean, { mipmaps: false, create: true });
 
-    const { buffer: texureBuffer, TexureOffset } =
-        Renderer.CreateUniformBuffer("TexureOffset");
+    const { buffer: textureBuffer, TextureOffset } =
+        Renderer.CreateUniformBuffer("TextureOffset");
 
-    TexureOffset.set(getBackgroundOffset(backgroundTexture));
-    Renderer.WriteBuffer(texureBuffer, TexureOffset);
+    TextureOffset.set(getBackgroundOffset(backgroundTexture));
+    Renderer.WriteBuffer(textureBuffer, TextureOffset);
 
-    TexureUniform.buffer = texureBuffer;
-    TexureUniform.offset = TexureOffset;
+    TextureUniform.buffer = textureBuffer;
+    TextureUniform.offset = TextureOffset;
 
     Title.AddBindGroups(
         Renderer.CreateBindGroup(
             Renderer.CreateBindGroupEntries([
                 Texture.CreateSampler(),
-                { buffer: texureBuffer },
+                { buffer: textureBuffer },
                 backgroundTexture.createView()
             ]), 1
         )
@@ -301,8 +311,8 @@ function resize()
 
     shape.Position = [innerWidth / 2, innerHeight / 2];
 
-    TexureUniform.offset.set(getBackgroundOffset(backgroundTexture));
-    Renderer.WriteBuffer(TexureUniform.buffer, TexureUniform.offset);
+    TextureUniform.offset.set(getBackgroundOffset(backgroundTexture));
+    Renderer.WriteBuffer(TextureUniform.buffer, TextureUniform.offset);
 
     BackgroundUniform.offset.set(getBackgroundOffset(backgroundTexture));
     Renderer.WriteBuffer(BackgroundUniform.buffer, BackgroundUniform.offset);
